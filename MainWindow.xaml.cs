@@ -1523,7 +1523,7 @@ namespace FFmpegConverterGUI
             about.Title = "About";
             about.Owner = this;
             about.Width = 360;
-            about.Height = 430;
+            about.Height = 372;
             about.ResizeMode = ResizeMode.NoResize;
             about.WindowStyle = WindowStyle.None;
             about.WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -1568,13 +1568,13 @@ namespace FFmpegConverterGUI
             credits.TextAlignment = TextAlignment.Center;
             credits.TextWrapping = TextWrapping.Wrap;
             credits.Foreground = new SolidColorBrush(GetThemeColor("MutedText"));
-            credits.Margin = new Thickness(0, 0, 0, 20);
+            credits.Margin = new Thickness(0, 0, 0, 16);
             panel.Children.Add(credits);
 
             StackPanel buttonRow = new StackPanel();
             buttonRow.Orientation = Orientation.Horizontal;
             buttonRow.HorizontalAlignment = HorizontalAlignment.Center;
-            buttonRow.Margin = new Thickness(0, 0, 0, 4);
+            buttonRow.Margin = new Thickness(0);
 
             Border closeButton = new Border();
             closeButton.Width = 96;

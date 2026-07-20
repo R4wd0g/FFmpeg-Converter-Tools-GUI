@@ -36,14 +36,18 @@
     <Reference Include="System.Core" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Xml" />
     <Reference Include="System.Xaml" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml" />
     <Page Include="MainWindow.xaml" />
     <Resource Include="icon.ico" />
+    <Resource Include="logo.png" />
     <Resource Include="banner-home.png" />
     <Resource Include="completed.mp3" />
+    <Resource Include="credits.mp3" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="App.xaml.cs">

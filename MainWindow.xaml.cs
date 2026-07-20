@@ -6,7 +6,10 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -22,25 +25,35 @@ namespace FFmpegConverterGUI
     public partial class MainWindow : Window
     {
         private const string BtbNFfmpegZipUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-05-13-55/ffmpeg-N-124841-gb355200263-win64-gpl.zip";
+        private const string GitHubLatestReleaseApiUrl = "https://api.github.com/repos/R4wd0g/FFmpeg-Converter-Tools-GUI/releases/latest";
+        private const string GitHubApiUserAgent = "FFmpeg-Converter-Tools-GUI-Updater";
         private readonly object processLock = new object();
+        private readonly object updateLock = new object();
         private readonly Dictionary<string, string> settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly string settingsPath;
         private BackgroundWorker worker;
         private Process currentProcess;
         private MediaPlayer completionSoundPlayer;
+        private MediaPlayer creditsSoundPlayer;
+        private DispatcherTimer creditsFadeOutTimer;
+        private EventHandler creditsLoopHandler;
         private volatile bool cancelRequested;
+        private volatile bool updateCheckInProgress;
         private bool darkTheme = true;
+        private bool startupUpdateCheckStarted;
 
         public MainWindow()
         {
             settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini");
             InitializeComponent();
             SourceInitialized += MainWindow_SourceInitialized;
+            Loaded += MainWindow_Loaded;
             DropArea.PreviewDragOver += DropArea_PreviewDragOver;
             DropArea.Drop += DropArea_Drop;
             ToolSelector.SelectionChanged += ToolSelector_SelectionChanged;
             ConvertTypeSelector.SelectionChanged += ConvertTypeSelector_SelectionChanged;
             AddButton.Click += AddButton_Click;
+            FormatSelector.SelectionChanged += FormatSelector_SelectionChanged;
             ClearButton.Click += ClearButton_Click;
             ProcessButton.Click += ProcessButton_Click;
             CancelButton.Click += CancelButton_Click;
@@ -56,6 +69,17 @@ namespace FFmpegConverterGUI
             TryUseDarkTitleBar(this, darkTheme);
         }
 
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (startupUpdateCheckStarted)
+            {
+                return;
+            }
+
+            startupUpdateCheckStarted = true;
+            BeginCheckForUpdates(false, this);
+        }
+
         private void ToolSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             string selected = GetSelectedTool();
@@ -67,6 +91,11 @@ namespace FFmpegConverterGUI
         private void ConvertTypeSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             RefreshConvertFormats();
+            UpdateGifOptionsVisibility();
+        }
+        private void FormatSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateGifOptionsVisibility();
         }
 
         private void DropArea_PreviewDragOver(object sender, DragEventArgs e)
@@ -126,6 +155,11 @@ namespace FFmpegConverterGUI
         private void AboutMenuItem_Click(object sender, RoutedEventArgs e)
         {
             ShowAboutWindow();
+        }
+
+        private void CheckForUpdatesMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            BeginCheckForUpdates(true, this);
         }
 
         private void DarkThemeMenuItem_Click(object sender, RoutedEventArgs e)
@@ -206,6 +240,15 @@ namespace FFmpegConverterGUI
             if (worker != null && worker.IsBusy)
             {
                 RequestCancel("Application is closing. Stopping active FFmpeg process.");
+            }
+
+            StopCreditsSound();
+
+            if (completionSoundPlayer != null)
+            {
+                completionSoundPlayer.Stop();
+                completionSoundPlayer.Close();
+                completionSoundPlayer = null;
             }
         }
 
@@ -1265,6 +1308,65 @@ namespace FFmpegConverterGUI
             }
 
             FormatSelector.SelectedIndex = 0;
+            UpdateGifOptionsVisibility();
+        }
+
+        private void UpdateGifOptionsVisibility()
+        {
+            if (GifParams == null)
+            {
+                return;
+            }
+
+            bool showGifParams = string.Equals(GetSelectedTool(), "Convert", StringComparison.OrdinalIgnoreCase)
+                && IsConvertImageSelected()
+                && string.Equals(GetSelectedFormat(), "GIF", StringComparison.OrdinalIgnoreCase);
+
+            GifParams.Visibility = showGifParams ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private int GetGifFps()
+        {
+            int fps = 12;
+            Dispatcher.Invoke(new Action(delegate
+            {
+                ComboBoxItem selectedItem = GifFpsSelector.SelectedItem as ComboBoxItem;
+                if (selectedItem != null)
+                {
+                    int parsed;
+                    if (int.TryParse(selectedItem.Content as string, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed))
+                    {
+                        fps = parsed;
+                    }
+                }
+            }));
+
+            return fps;
+        }
+
+        private int GetGifWidth()
+        {
+            string quality = "Medium";
+            Dispatcher.Invoke(new Action(delegate
+            {
+                ComboBoxItem selectedItem = GifQualitySelector.SelectedItem as ComboBoxItem;
+                if (selectedItem != null && selectedItem.Content != null)
+                {
+                    quality = selectedItem.Content as string;
+                }
+            }));
+
+            if (string.Equals(quality, "Low", StringComparison.OrdinalIgnoreCase))
+            {
+                return 480;
+            }
+
+            if (string.Equals(quality, "High", StringComparison.OrdinalIgnoreCase))
+            {
+                return 800;
+            }
+
+            return 640;
         }
 
         private void AddFormatItem(string format)
@@ -1418,7 +1520,7 @@ namespace FFmpegConverterGUI
             about.Title = "About";
             about.Owner = this;
             about.Width = 360;
-            about.Height = 390;
+            about.Height = 430;
             about.ResizeMode = ResizeMode.NoResize;
             about.WindowStyle = WindowStyle.None;
             about.WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -1436,7 +1538,7 @@ namespace FFmpegConverterGUI
             panel.HorizontalAlignment = HorizontalAlignment.Stretch;
 
             Image logo = new Image();
-            logo.Source = new BitmapImage(new Uri("pack://application:,,,/icon.ico", UriKind.Absolute));
+            logo.Source = new BitmapImage(new Uri("pack://application:,,,/logo.png", UriKind.Absolute));
             logo.Width = 96;
             logo.Height = 96;
             logo.Margin = new Thickness(0, 8, 0, 18);
@@ -1448,16 +1550,50 @@ namespace FFmpegConverterGUI
             title.FontSize = 18;
             title.FontWeight = FontWeights.Bold;
             title.TextAlignment = TextAlignment.Center;
-            title.Margin = new Thickness(0, 0, 0, 10);
+            title.Margin = new Thickness(0, 0, 0, 6);
             panel.Children.Add(title);
 
+            TextBlock version = new TextBlock();
+            version.Text = "Version " + GetCurrentAppVersionText();
+            version.TextAlignment = TextAlignment.Center;
+            version.Foreground = new SolidColorBrush(GetThemeColor("MutedText"));
+            version.Margin = new Thickness(0, 0, 0, 12);
+            panel.Children.Add(version);
+
             TextBlock credits = new TextBlock();
-            credits.Text = "Created by R4wd0G\n\nA comeback project that turns a practical FFmpeg batch toolkit into a native Windows GUI for faster everyday media conversion.";
+            credits.Text = "Created by R4wd0G\n\nA practical FFmpeg batch toolkit reimagined as a native Windows GUI for faster everyday media conversion.";
             credits.TextAlignment = TextAlignment.Center;
             credits.TextWrapping = TextWrapping.Wrap;
             credits.Foreground = new SolidColorBrush(GetThemeColor("MutedText"));
             credits.Margin = new Thickness(0, 0, 0, 20);
             panel.Children.Add(credits);
+
+            StackPanel buttonRow = new StackPanel();
+            buttonRow.Orientation = Orientation.Horizontal;
+            buttonRow.HorizontalAlignment = HorizontalAlignment.Center;
+            buttonRow.Margin = new Thickness(0, 0, 0, 4);
+
+            Border updateButton = new Border();
+            updateButton.Width = 150;
+            updateButton.Height = 34;
+            updateButton.CornerRadius = new CornerRadius(8);
+            updateButton.Background = new SolidColorBrush(GetThemeColor("PanelAlt"));
+            updateButton.BorderBrush = new SolidColorBrush(GetThemeColor("Border"));
+            updateButton.BorderThickness = new Thickness(1);
+            updateButton.HorizontalAlignment = HorizontalAlignment.Center;
+            updateButton.Cursor = Cursors.Hand;
+            updateButton.Margin = new Thickness(0, 0, 10, 0);
+            updateButton.MouseEnter += delegate { updateButton.Background = new SolidColorBrush(GetThemeColor("Hover")); };
+            updateButton.MouseLeave += delegate { updateButton.Background = new SolidColorBrush(GetThemeColor("PanelAlt")); };
+
+            TextBlock updateText = new TextBlock();
+            updateText.Text = "Check for updates";
+            updateText.Foreground = new SolidColorBrush(GetThemeColor("Text"));
+            updateText.FontWeight = FontWeights.SemiBold;
+            updateText.HorizontalAlignment = HorizontalAlignment.Center;
+            updateText.VerticalAlignment = VerticalAlignment.Center;
+            updateButton.Child = updateText;
+            buttonRow.Children.Add(updateButton);
 
             Border closeButton = new Border();
             closeButton.Width = 96;
@@ -1478,14 +1614,36 @@ namespace FFmpegConverterGUI
             closeText.HorizontalAlignment = HorizontalAlignment.Center;
             closeText.VerticalAlignment = VerticalAlignment.Center;
             closeButton.Child = closeText;
-            panel.Children.Add(closeButton);
+            buttonRow.Children.Add(closeButton);
+            panel.Children.Add(buttonRow);
 
             shell.Child = panel;
             about.Content = shell;
 
+            about.Opacity = 0;
+
+            PlayCreditsSound();
+
             bool closeStarted = false;
             bool allowClose = false;
             DispatcherTimer aboutFadeTimer = null;
+            DateTime showFadeStart = DateTime.Now;
+            DispatcherTimer aboutShowFadeTimer = new DispatcherTimer();
+            aboutShowFadeTimer.Interval = TimeSpan.FromMilliseconds(16);
+            aboutShowFadeTimer.Tick += delegate
+            {
+                double elapsed = (DateTime.Now - showFadeStart).TotalMilliseconds;
+                double progress = Math.Min(1, elapsed / 400);
+                about.Opacity = progress;
+
+                if (progress >= 1)
+                {
+                    about.Opacity = 1;
+                    aboutShowFadeTimer.Stop();
+                }
+            };
+            aboutShowFadeTimer.Start();
+
             Action beginClose = delegate
             {
                 if (closeStarted)
@@ -1496,6 +1654,8 @@ namespace FFmpegConverterGUI
                 closeStarted = true;
                 closeButton.IsHitTestVisible = false;
                 closeButton.Opacity = 0.65;
+
+                StartCreditsFadeOut(700);
 
                 DateTime fadeStart = DateTime.Now;
                 aboutFadeTimer = new DispatcherTimer();
@@ -1516,6 +1676,10 @@ namespace FFmpegConverterGUI
                 aboutFadeTimer.Start();
             };
 
+            updateButton.MouseLeftButtonUp += delegate
+            {
+                BeginCheckForUpdates(true, about);
+            };
             closeButton.MouseLeftButtonUp += delegate { beginClose(); };
             about.Closing += delegate(object sender, CancelEventArgs e)
             {
@@ -1527,12 +1691,534 @@ namespace FFmpegConverterGUI
             };
             about.Closed += delegate
             {
+                aboutShowFadeTimer.Stop();
+
                 if (aboutFadeTimer != null)
                 {
                     aboutFadeTimer.Stop();
                 }
+
+                StopCreditsSound();
             };
             about.ShowDialog();
+        }
+
+        private void BeginCheckForUpdates(bool interactive, Window owner)
+        {
+            lock (updateLock)
+            {
+                if (updateCheckInProgress)
+                {
+                    if (interactive)
+                    {
+                        ShowMessage(owner, "An update check is already in progress.", "Check for updates", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+
+                    return;
+                }
+
+                updateCheckInProgress = true;
+            }
+
+            Log("Checking for updates...");
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    CheckForUpdatesCore(interactive, owner);
+                }
+                finally
+                {
+                    lock (updateLock)
+                    {
+                        updateCheckInProgress = false;
+                    }
+                }
+            });
+        }
+
+        private void CheckForUpdatesCore(bool interactive, Window owner)
+        {
+            try
+            {
+                GitHubReleaseInfo release = GetLatestReleaseInfo();
+                if (release == null)
+                {
+                    if (interactive)
+                    {
+                        ShowMessage(owner, "Could not retrieve the latest release information from GitHub.", "Check for updates", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+
+                    return;
+                }
+
+                Version currentVersion;
+                Version latestVersion;
+                string currentVersionText = GetCurrentAppVersionText();
+                string latestVersionText = NormalizeVersionText(release.TagName);
+
+                if (!TryParseVersion(currentVersionText, out currentVersion) || !TryParseVersion(latestVersionText, out latestVersion))
+                {
+                    Log("Update check failed: invalid version information.");
+                    if (interactive)
+                    {
+                        ShowMessage(owner, "Could not compare the current version with the latest release.", "Check for updates", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+
+                    return;
+                }
+
+                if (latestVersion.CompareTo(currentVersion) <= 0)
+                {
+                    Log("No updates found.");
+                    if (interactive)
+                    {
+                        ShowMessage(owner, "You are already using the latest version (" + currentVersionText + ").", "Check for updates", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+
+                    return;
+                }
+
+                ReleaseAssetInfo asset = FindBestUpdateAsset(release, DetectInstallMode());
+                if (asset == null)
+                {
+                    Log("Update found, but no compatible asset is available in the latest release.");
+                    if (interactive)
+                    {
+                        ShowMessage(owner, "A newer release was found, but no compatible download asset is available.", "Check for updates", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+
+                    return;
+                }
+
+                MessageBoxResult result = ShowMessage(
+                    owner,
+                    "New update found!\n\nCurrent: " + currentVersionText + "\nNew: " + latestVersionText + "\n\nDownload and install?",
+                    "Update available",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+
+                if (result != MessageBoxResult.Yes)
+                {
+                    Log("Update prompt dismissed by the user.");
+                    return;
+                }
+
+                if (IsInstallerAsset(asset.Name))
+                {
+                    DownloadAndLaunchInstallerUpdate(asset, owner);
+                }
+                else
+                {
+                    DownloadAndLaunchPortableUpdate(asset, owner);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log("Update check failed: " + ex.Message);
+                if (interactive)
+                {
+                    ShowMessage(owner, "Update check failed: " + ex.Message, "Check for updates", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+        }
+
+        private GitHubReleaseInfo GetLatestReleaseInfo()
+        {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(GitHubLatestReleaseApiUrl);
+            request.Accept = "application/vnd.github+json";
+            request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+            request.UserAgent = GitHubApiUserAgent;
+
+            using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+            using (Stream responseStream = response.GetResponseStream())
+            {
+                if (responseStream == null)
+                {
+                    return null;
+                }
+
+                DataContractJsonSerializer serializer = new DataContractJsonSerializer(typeof(GitHubReleaseInfo));
+                return serializer.ReadObject(responseStream) as GitHubReleaseInfo;
+            }
+        }
+
+        private ReleaseAssetInfo FindBestUpdateAsset(GitHubReleaseInfo release, InstallMode installMode)
+        {
+            ReleaseAssetInfo preferred = null;
+            ReleaseAssetInfo fallback = null;
+            if (release == null || release.Assets == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < release.Assets.Length; i++)
+            {
+                ReleaseAssetInfo asset = release.Assets[i];
+                if (asset == null || IsNullOrWhiteSpace(asset.Name) || IsNullOrWhiteSpace(asset.BrowserDownloadUrl))
+                {
+                    continue;
+                }
+
+                if (installMode == InstallMode.Installer && IsInstallerAsset(asset.Name))
+                {
+                    return asset;
+                }
+
+                if (installMode == InstallMode.Portable && IsPortableAsset(asset.Name))
+                {
+                    return asset;
+                }
+
+                if (fallback == null && (IsPortableAsset(asset.Name) || IsInstallerAsset(asset.Name)))
+                {
+                    fallback = asset;
+                }
+
+                if (preferred == null)
+                {
+                    preferred = asset;
+                }
+            }
+
+            return fallback ?? preferred;
+        }
+
+        private void DownloadAndLaunchInstallerUpdate(ReleaseAssetInfo asset, Window owner)
+        {
+            string tempFile = Path.Combine(Path.GetTempPath(), asset.Name);
+            DeleteIfExists(tempFile);
+            DownloadFile(asset.BrowserDownloadUrl, tempFile);
+
+            Log("Installer update downloaded: " + tempFile);
+            ShowMessage(owner, "The installer has been downloaded. The app will now close so the update can continue.", "Update ready", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            ProcessStartInfo startInfo = new ProcessStartInfo(tempFile, "/CURRENTUSER");
+            startInfo.UseShellExecute = true;
+            startInfo.WorkingDirectory = Path.GetDirectoryName(tempFile);
+            Process.Start(startInfo);
+
+            Dispatcher.BeginInvoke(new Action(delegate
+            {
+                Application.Current.Shutdown();
+            }));
+        }
+
+        private void DownloadAndLaunchPortableUpdate(ReleaseAssetInfo asset, Window owner)
+        {
+            string tempRoot = Path.Combine(Path.GetTempPath(), "FFmpegConverterGUI-Update-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempRoot);
+
+            string zipPath = Path.Combine(tempRoot, asset.Name);
+            string scriptPath = Path.Combine(tempRoot, "ApplyPortableUpdate.ps1");
+            string targetDirectory = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string appExePath = Assembly.GetExecutingAssembly().Location;
+
+            DownloadFile(asset.BrowserDownloadUrl, zipPath);
+            File.WriteAllText(scriptPath, BuildPortableUpdateScript(), new UTF8Encoding(false));
+
+            Log("Portable update downloaded: " + zipPath);
+            ShowMessage(owner, "The portable package has been downloaded. The app will now close so the files can be replaced.", "Update ready", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            ProcessStartInfo startInfo = new ProcessStartInfo("powershell.exe");
+            startInfo.Arguments = "-NoProfile -ExecutionPolicy Bypass -File "
+                + Quote(scriptPath)
+                + " -PidToWait " + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture)
+                + " -ZipPath " + Quote(zipPath)
+                + " -TargetDir " + Quote(targetDirectory)
+                + " -AppExe " + Quote(appExePath);
+            startInfo.CreateNoWindow = true;
+            startInfo.UseShellExecute = false;
+            startInfo.WorkingDirectory = tempRoot;
+            Process.Start(startInfo);
+
+            Dispatcher.BeginInvoke(new Action(delegate
+            {
+                Application.Current.Shutdown();
+            }));
+        }
+
+        private void DownloadFile(string url, string destinationPath)
+        {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+            using (WebClient client = new WebClient())
+            {
+                client.Headers[HttpRequestHeader.UserAgent] = GitHubApiUserAgent;
+                client.DownloadFile(url, destinationPath);
+            }
+        }
+
+        private string BuildPortableUpdateScript()
+        {
+            return @"
+param(
+    [int]$PidToWait,
+    [string]$ZipPath,
+    [string]$TargetDir,
+    [string]$AppExe
+)
+
+$ErrorActionPreference = 'Stop'
+$extractDir = $null
+
+try {
+    while (Get-Process -Id $PidToWait -ErrorAction SilentlyContinue) {
+        Start-Sleep -Milliseconds 500
+    }
+
+    $extractDir = Join-Path ([System.IO.Path]::GetTempPath()) ('FFmpegConverterGUI-Extract-' + [Guid]::NewGuid().ToString('N'))
+    Expand-Archive -LiteralPath $ZipPath -DestinationPath $extractDir -Force
+
+    Get-ChildItem -LiteralPath $extractDir | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $TargetDir $_.Name) -Recurse -Force
+    }
+
+    Start-Process -FilePath $AppExe
+}
+catch {
+}
+finally {
+    if ($extractDir -and (Test-Path $extractDir)) {
+        Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    if (Test-Path $ZipPath) {
+        Remove-Item -LiteralPath $ZipPath -Force -ErrorAction SilentlyContinue
+    }
+}
+";
+        }
+
+        private InstallMode DetectInstallMode()
+        {
+            string markerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "install-mode.txt");
+            if (File.Exists(markerPath))
+            {
+                try
+                {
+                    string marker = File.ReadAllText(markerPath).Trim();
+                    if (string.Equals(marker, "installer", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return InstallMode.Installer;
+                    }
+
+                    if (string.Equals(marker, "portable", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return InstallMode.Portable;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            string appDirectory = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string defaultInstalledDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "FFmpeg Converter Tools GUI");
+
+            if (appDirectory.StartsWith(defaultInstalledDirectory, StringComparison.OrdinalIgnoreCase))
+            {
+                return InstallMode.Installer;
+            }
+
+            return InstallMode.Portable;
+        }
+
+        private bool IsInstallerAsset(string assetName)
+        {
+            return assetName.EndsWith("-installer.exe", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsPortableAsset(string assetName)
+        {
+            return assetName.EndsWith("-portable.zip", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private string GetCurrentAppVersionText()
+        {
+            object[] attributes = Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false);
+            if (attributes != null && attributes.Length > 0)
+            {
+                AssemblyInformationalVersionAttribute informational = attributes[0] as AssemblyInformationalVersionAttribute;
+                if (informational != null && !IsNullOrWhiteSpace(informational.InformationalVersion))
+                {
+                    return informational.InformationalVersion.Trim();
+                }
+            }
+
+            Version version = Assembly.GetExecutingAssembly().GetName().Version;
+            return version == null ? "0.0.0" : version.ToString(3);
+        }
+
+        private string NormalizeVersionText(string versionText)
+        {
+            if (IsNullOrWhiteSpace(versionText))
+            {
+                return string.Empty;
+            }
+
+            string normalized = versionText.Trim();
+            if (normalized.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = normalized.Substring(1);
+            }
+
+            int dashIndex = normalized.IndexOf('-');
+            if (dashIndex > 0)
+            {
+                normalized = normalized.Substring(0, dashIndex);
+            }
+
+            return normalized;
+        }
+
+        private bool TryParseVersion(string versionText, out Version version)
+        {
+            version = null;
+            string normalized = NormalizeVersionText(versionText);
+            if (IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            try
+            {
+                version = new Version(normalized);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private MessageBoxResult ShowMessage(Window owner, string text, string caption, MessageBoxButton buttons, MessageBoxImage icon)
+        {
+            MessageBoxResult result = MessageBoxResult.None;
+
+            Action showAction = delegate
+            {
+                Window messageOwner = owner;
+                if (messageOwner == null || !messageOwner.IsLoaded)
+                {
+                    messageOwner = this.IsLoaded ? this : null;
+                }
+
+                if (messageOwner != null)
+                {
+                    result = MessageBox.Show(messageOwner, text, caption, buttons, icon);
+                }
+                else
+                {
+                    result = MessageBox.Show(text, caption, buttons, icon);
+                }
+            };
+
+            if (Dispatcher.CheckAccess())
+            {
+                showAction();
+            }
+            else
+            {
+                Dispatcher.Invoke(showAction);
+            }
+
+            return result;
+        }
+
+        private void PlayCreditsSound()
+        {
+            try
+            {
+                StopCreditsSound();
+                creditsSoundPlayer = new MediaPlayer();
+                creditsLoopHandler = delegate(object sender, EventArgs e)
+                {
+                    if (creditsSoundPlayer != null)
+                    {
+                        creditsSoundPlayer.Position = TimeSpan.Zero;
+                        creditsSoundPlayer.Play();
+                    }
+                };
+                creditsSoundPlayer.MediaEnded += creditsLoopHandler;
+                creditsSoundPlayer.Open(new Uri(GetExtractedResourcePath("credits.mp3"), UriKind.Absolute));
+                creditsSoundPlayer.Volume = 0.55;
+                creditsSoundPlayer.Play();
+            }
+            catch (Exception ex)
+            {
+                Log("Could not play credits sound: " + ex.Message);
+            }
+        }
+
+        private void StartCreditsFadeOut(int durationMs)
+        {
+            if (creditsSoundPlayer == null)
+            {
+                return;
+            }
+
+            StopCreditsFadeOutTimer();
+
+            double startVolume = creditsSoundPlayer.Volume;
+            DateTime fadeStart = DateTime.Now;
+            creditsFadeOutTimer = new DispatcherTimer();
+            creditsFadeOutTimer.Interval = TimeSpan.FromMilliseconds(16);
+            creditsFadeOutTimer.Tick += delegate
+            {
+                if (creditsSoundPlayer == null)
+                {
+                    StopCreditsFadeOutTimer();
+                    return;
+                }
+
+                double elapsed = (DateTime.Now - fadeStart).TotalMilliseconds;
+                double progress = Math.Min(1.0, elapsed / durationMs);
+                creditsSoundPlayer.Volume = startVolume * (1.0 - progress);
+
+                if (progress >= 1.0)
+                {
+                    creditsSoundPlayer.Volume = 0.0;
+                    StopCreditsFadeOutTimer();
+                }
+            };
+            creditsFadeOutTimer.Start();
+        }
+
+        private void StopCreditsFadeOutTimer()
+        {
+            if (creditsFadeOutTimer != null)
+            {
+                creditsFadeOutTimer.Stop();
+                creditsFadeOutTimer = null;
+            }
+        }
+
+        private void StopCreditsSound()
+        {
+            StopCreditsFadeOutTimer();
+
+            if (creditsSoundPlayer != null)
+            {
+                try
+                {
+                    if (creditsLoopHandler != null)
+                    {
+                        creditsSoundPlayer.MediaEnded -= creditsLoopHandler;
+                    }
+                    creditsSoundPlayer.Stop();
+                    creditsSoundPlayer.Close();
+                }
+                catch
+                {
+                }
+
+                creditsSoundPlayer = null;
+            }
+
+            creditsLoopHandler = null;
         }
 
         private void PlayCompletionSound()
@@ -1815,6 +2501,32 @@ namespace FFmpegConverterGUI
 
             public string SelectedTool { get; private set; }
             public string[] Files { get; private set; }
+        }
+
+        private enum InstallMode
+        {
+            Portable,
+            Installer
+        }
+
+        [DataContract]
+        private sealed class GitHubReleaseInfo
+        {
+            [DataMember(Name = "tag_name")]
+            public string TagName { get; set; }
+
+            [DataMember(Name = "assets")]
+            public ReleaseAssetInfo[] Assets { get; set; }
+        }
+
+        [DataContract]
+        private sealed class ReleaseAssetInfo
+        {
+            [DataMember(Name = "name")]
+            public string Name { get; set; }
+
+            [DataMember(Name = "browser_download_url")]
+            public string BrowserDownloadUrl { get; set; }
         }
 
         private static void TryUseDarkTitleBar(Window window, bool useDarkTitleBar)

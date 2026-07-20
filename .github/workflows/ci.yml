@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Debug x64
+        shell: pwsh
+        run: |
+          msbuild FFmpegConverterGUI.csproj /t:Build /p:Configuration=Debug /p:Platform=x64 /property:GenerateFullPaths=true /consoleloggerparameters:NoSummary
+
+      - name: Verify build output
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath 'bin/Debug/FFmpegConverterGUI.exe')) {
+            throw 'Build output not found: bin/Debug/FFmpegConverterGUI.exe'
+          }

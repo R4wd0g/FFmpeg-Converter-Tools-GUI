@@ -19,5 +19,9 @@ x86/
 packages/
 TestResults/
 coverage/
+artifacts/
+release-staging/
 ffmpeg.exe
 settings.ini
+credits.mp3
+logo.png

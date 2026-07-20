@@ -43,6 +43,11 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Install .NET Framework 4.8 targeting pack
+        shell: pwsh
+        run: |
+          choco install netfx-4.8-devpack --no-progress -y
+
       - name: Read version from AssemblyInfo
         shell: pwsh
         run: |

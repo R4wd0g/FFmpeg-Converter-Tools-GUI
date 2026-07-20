@@ -492,6 +492,18 @@
                             <MenuItem Name="DarkThemeMenuItem" Header="_Dark" IsCheckable="True" IsChecked="True" Click="DarkThemeMenuItem_Click" />
                             <MenuItem Name="LightThemeMenuItem" Header="_Light" IsCheckable="True" Click="LightThemeMenuItem_Click" />
                         </MenuItem>
+                        <MenuItem Header="_Language">
+                            <MenuItem Name="EnglishLanguageMenuItem" Header="English" Tag="en-US" IsCheckable="True" Click="LanguageMenuItem_Click" />
+                            <MenuItem Name="PortugueseBrazilLanguageMenuItem" Header="Português (Brasil)" Tag="pt-BR" IsCheckable="True" Click="LanguageMenuItem_Click" />
+                            <MenuItem Name="SpanishLanguageMenuItem" Header="Español" Tag="es-ES" IsCheckable="True" Click="LanguageMenuItem_Click" />
+                            <MenuItem Name="FrenchLanguageMenuItem" Header="Français" Tag="fr-FR" IsCheckable="True" Click="LanguageMenuItem_Click" />
+                            <MenuItem Name="GermanLanguageMenuItem" Header="Deutsch" Tag="de-DE" IsCheckable="True" Click="LanguageMenuItem_Click" />
+                            <MenuItem Name="ItalianLanguageMenuItem" Header="Italiano" Tag="it-IT" IsCheckable="True" Click="LanguageMenuItem_Click" />
+                            <MenuItem Name="JapaneseLanguageMenuItem" Header="日本語" Tag="ja-JP" IsCheckable="True" Click="LanguageMenuItem_Click" />
+                            <MenuItem Name="KoreanLanguageMenuItem" Header="한국어" Tag="ko-KR" IsCheckable="True" Click="LanguageMenuItem_Click" />
+                            <MenuItem Name="ChineseSimplifiedLanguageMenuItem" Header="中文 (简体)" Tag="zh-CN" IsCheckable="True" Click="LanguageMenuItem_Click" />
+                            <MenuItem Name="ChineseTraditionalLanguageMenuItem" Header="中文 (繁體)" Tag="zh-TW" IsCheckable="True" Click="LanguageMenuItem_Click" />
+                        </MenuItem>
                     </MenuItem>
                     <MenuItem Header="_Help">
                         <MenuItem Header="_Check for updates" Click="CheckForUpdatesMenuItem_Click" />

@@ -64,6 +64,7 @@ namespace FFmpegConverterGUI
             ToolSelector_SelectionChanged(this, null);
             LoadSettings();
             ApplyTheme(GetSetting("Theme", "Dark").Equals("Dark", StringComparison.OrdinalIgnoreCase), false);
+            ApplyLanguageSetting(GetSetting("Language", "en-US"), false);
             RefreshConvertFormats();
         }
 
@@ -173,6 +174,17 @@ namespace FFmpegConverterGUI
         private void LightThemeMenuItem_Click(object sender, RoutedEventArgs e)
         {
             ApplyTheme(false);
+        }
+
+        private void LanguageMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            MenuItem item = sender as MenuItem;
+            if (item == null || item.Tag == null)
+            {
+                return;
+            }
+
+            ApplyLanguageSetting(item.Tag.ToString(), true);
         }
 
         private void OpenFiles()
@@ -2306,6 +2318,12 @@ finally {
                 changed = true;
             }
 
+            if (!settings.ContainsKey("Language"))
+            {
+                settings["Language"] = "en-US";
+                changed = true;
+            }
+
             if (changed)
             {
                 SaveSettings();
@@ -2331,6 +2349,7 @@ finally {
                 StringBuilder builder = new StringBuilder();
                 builder.AppendLine("[Settings]");
                 builder.AppendLine("Theme=" + GetSetting("Theme", "Dark"));
+                builder.AppendLine("Language=" + GetSetting("Language", "en-US"));
                 File.WriteAllText(settingsPath, builder.ToString(), Encoding.UTF8);
             }
             catch (Exception ex)
@@ -2374,6 +2393,40 @@ finally {
             {
                 SetSetting("Theme", useDarkTheme ? "Dark" : "Light");
             }
+        }
+
+        private void ApplyLanguageSetting(string languageCode, bool saveSetting)
+        {
+            if (IsNullOrWhiteSpace(languageCode))
+            {
+                languageCode = "en-US";
+            }
+
+            SetLanguageMenuItemChecked(EnglishLanguageMenuItem, languageCode);
+            SetLanguageMenuItemChecked(PortugueseBrazilLanguageMenuItem, languageCode);
+            SetLanguageMenuItemChecked(SpanishLanguageMenuItem, languageCode);
+            SetLanguageMenuItemChecked(FrenchLanguageMenuItem, languageCode);
+            SetLanguageMenuItemChecked(GermanLanguageMenuItem, languageCode);
+            SetLanguageMenuItemChecked(ItalianLanguageMenuItem, languageCode);
+            SetLanguageMenuItemChecked(JapaneseLanguageMenuItem, languageCode);
+            SetLanguageMenuItemChecked(KoreanLanguageMenuItem, languageCode);
+            SetLanguageMenuItemChecked(ChineseSimplifiedLanguageMenuItem, languageCode);
+            SetLanguageMenuItemChecked(ChineseTraditionalLanguageMenuItem, languageCode);
+
+            if (saveSetting)
+            {
+                SetSetting("Language", languageCode);
+            }
+        }
+
+        private void SetLanguageMenuItemChecked(MenuItem item, string languageCode)
+        {
+            if (item == null || item.Tag == null)
+            {
+                return;
+            }
+
+            item.IsChecked = string.Equals(item.Tag.ToString(), languageCode, StringComparison.OrdinalIgnoreCase);
         }
 
         private void SetBrush(string resourceName, Color color)

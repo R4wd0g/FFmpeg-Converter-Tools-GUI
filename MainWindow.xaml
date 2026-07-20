@@ -481,18 +481,18 @@
                        HorizontalAlignment="Center"
                        VerticalAlignment="Top" />
                 <Menu VerticalAlignment="Top" Background="Transparent">
-                    <MenuItem Header="_File">
-                        <MenuItem Header="_Open files..." Click="OpenFilesMenuItem_Click" />
-                        <MenuItem Header="_Clear queue" Click="ClearQueueMenuItem_Click" />
+                    <MenuItem Name="FileMenuItem" Header="_File">
+                        <MenuItem Name="OpenFilesMenuItem" Header="_Open files..." Click="OpenFilesMenuItem_Click" />
+                        <MenuItem Name="ClearQueueMenuItem" Header="_Clear queue" Click="ClearQueueMenuItem_Click" />
                         <Separator />
-                        <MenuItem Header="E_xit" Click="ExitMenuItem_Click" />
+                        <MenuItem Name="ExitMenuItem" Header="E_xit" Click="ExitMenuItem_Click" />
                     </MenuItem>
-                    <MenuItem Header="_Settings">
-                        <MenuItem Header="_Theme">
+                    <MenuItem Name="SettingsMenuItem" Header="_Settings">
+                        <MenuItem Name="ThemeMenuItem" Header="_Theme">
                             <MenuItem Name="DarkThemeMenuItem" Header="_Dark" IsCheckable="True" IsChecked="True" Click="DarkThemeMenuItem_Click" />
                             <MenuItem Name="LightThemeMenuItem" Header="_Light" IsCheckable="True" Click="LightThemeMenuItem_Click" />
                         </MenuItem>
-                        <MenuItem Header="_Language">
+                        <MenuItem Name="LanguageMenuItem" Header="_Language">
                             <MenuItem Name="EnglishLanguageMenuItem" Header="English" Tag="en-US" IsCheckable="True" Click="LanguageMenuItem_Click" />
                             <MenuItem Name="PortugueseBrazilLanguageMenuItem" Header="Português (Brasil)" Tag="pt-BR" IsCheckable="True" Click="LanguageMenuItem_Click" />
                             <MenuItem Name="SpanishLanguageMenuItem" Header="Español" Tag="es-ES" IsCheckable="True" Click="LanguageMenuItem_Click" />
@@ -505,9 +505,9 @@
                             <MenuItem Name="ChineseTraditionalLanguageMenuItem" Header="中文 (繁體)" Tag="zh-TW" IsCheckable="True" Click="LanguageMenuItem_Click" />
                         </MenuItem>
                     </MenuItem>
-                    <MenuItem Header="_Help">
-                        <MenuItem Header="_Check for updates" Click="CheckForUpdatesMenuItem_Click" />
-                        <MenuItem Header="_About" Click="AboutMenuItem_Click" />
+                    <MenuItem Name="HelpMenuItem" Header="_Help">
+                        <MenuItem Name="CheckForUpdatesMenuItem" Header="_Check for updates" Click="CheckForUpdatesMenuItem_Click" />
+                        <MenuItem Name="AboutMenuItem" Header="_About" Click="AboutMenuItem_Click" />
                     </MenuItem>
                 </Menu>
             </Grid>
@@ -516,17 +516,17 @@
         <DockPanel Margin="12,6,12,12">
 
         <StackPanel Orientation="Horizontal" Margin="0,0,0,8" DockPanel.Dock="Top">
-            <TextBlock Text="Tool:" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock Name="ToolLabel" Text="Tool:" VerticalAlignment="Center" Margin="0,0,8,0" />
             <ComboBox Name="ToolSelector" Width="150" SelectedIndex="0">
-                <ComboBoxItem>Compress</ComboBoxItem>
-                <ComboBoxItem>Convert</ComboBoxItem>
-                <ComboBoxItem>Cut</ComboBoxItem>
-                <ComboBoxItem>Merge</ComboBoxItem>
-                <ComboBoxItem>Remux / Repair</ComboBoxItem>
-                <ComboBoxItem>Remove Subtitles</ComboBoxItem>
+                <ComboBoxItem Tag="Compress">Compress</ComboBoxItem>
+                <ComboBoxItem Tag="Convert">Convert</ComboBoxItem>
+                <ComboBoxItem Tag="Cut">Cut</ComboBoxItem>
+                <ComboBoxItem Tag="Merge">Merge</ComboBoxItem>
+                <ComboBoxItem Tag="Remux / Repair">Remux / Repair</ComboBoxItem>
+                <ComboBoxItem Tag="Remove Subtitles">Remove Subtitles</ComboBoxItem>
             </ComboBox>
             <StackPanel Name="CompressParams" Orientation="Horizontal" Margin="12,0,0,0">
-                <TextBlock Text="Quality:" VerticalAlignment="Center" Margin="6,0,4,0" />
+                <TextBlock Name="CompressQualityLabel" Text="Quality:" VerticalAlignment="Center" Margin="6,0,4,0" />
                 <ComboBox Name="QualitySelector" Width="90" SelectedIndex="0">
                     <ComboBoxItem>100%</ComboBoxItem>
                     <ComboBoxItem>90%</ComboBoxItem>
@@ -541,20 +541,20 @@
                 </ComboBox>
             </StackPanel>
             <StackPanel Name="ConvertParams" Orientation="Horizontal" Margin="12,0,0,0" Visibility="Collapsed">
-                <TextBlock Text="Type:" VerticalAlignment="Center" Margin="6,0,4,0" />
+                <TextBlock Name="ConvertTypeLabel" Text="Type:" VerticalAlignment="Center" Margin="6,0,4,0" />
                 <ComboBox Name="ConvertTypeSelector" Width="80" SelectedIndex="0">
-                    <ComboBoxItem>Video</ComboBoxItem>
-                    <ComboBoxItem>Audio</ComboBoxItem>
-                    <ComboBoxItem>Image</ComboBoxItem>
+                    <ComboBoxItem Tag="Video">Video</ComboBoxItem>
+                    <ComboBoxItem Tag="Audio">Audio</ComboBoxItem>
+                    <ComboBoxItem Tag="Image">Image</ComboBoxItem>
                 </ComboBox>
-                <TextBlock Text="Format:" VerticalAlignment="Center" Margin="8,0,4,0" />
+                <TextBlock Name="FormatLabel" Text="Format:" VerticalAlignment="Center" Margin="8,0,4,0" />
                 <ComboBox Name="FormatSelector" Width="90" SelectedIndex="0">
                     <ComboBoxItem>MP4</ComboBoxItem>
                     <ComboBoxItem>MKV</ComboBoxItem>
                     <ComboBoxItem>AVI</ComboBoxItem>
                 </ComboBox>
                 <StackPanel Name="GifParams" Orientation="Horizontal" Margin="8,0,0,0" Visibility="Collapsed">
-                    <TextBlock Text="FPS:" VerticalAlignment="Center" Margin="0,0,4,0" />
+                    <TextBlock Name="GifFpsLabel" Text="FPS:" VerticalAlignment="Center" Margin="0,0,4,0" />
                     <ComboBox Name="GifFpsSelector" Width="70" SelectedIndex="2">
                         <ComboBoxItem>8</ComboBoxItem>
                         <ComboBoxItem>10</ComboBoxItem>
@@ -564,23 +564,23 @@
                         <ComboBoxItem>24</ComboBoxItem>
                         <ComboBoxItem>30</ComboBoxItem>
                     </ComboBox>
-                    <TextBlock Text="Quality:" VerticalAlignment="Center" Margin="8,0,4,0" />
+                    <TextBlock Name="GifQualityLabel" Text="Quality:" VerticalAlignment="Center" Margin="8,0,4,0" />
                     <ComboBox Name="GifQualitySelector" Width="95" SelectedIndex="1">
-                        <ComboBoxItem>Low</ComboBoxItem>
-                        <ComboBoxItem>Medium</ComboBoxItem>
-                        <ComboBoxItem>High</ComboBoxItem>
+                        <ComboBoxItem Tag="Low">Low</ComboBoxItem>
+                        <ComboBoxItem Tag="Medium">Medium</ComboBoxItem>
+                        <ComboBoxItem Tag="High">High</ComboBoxItem>
                     </ComboBox>
                 </StackPanel>
             </StackPanel>
             <StackPanel Name="CutParams" Orientation="Horizontal" Margin="12,0,0,0" Visibility="Collapsed">
-                <TextBlock Text="Type:" VerticalAlignment="Center" Margin="6,0,4,0" />
+                <TextBlock Name="CutTypeLabel" Text="Type:" VerticalAlignment="Center" Margin="6,0,4,0" />
                 <ComboBox Name="CutTypeSelector" Width="80" SelectedIndex="0">
-                    <ComboBoxItem>Video</ComboBoxItem>
-                    <ComboBoxItem>Audio</ComboBoxItem>
+                    <ComboBoxItem Tag="Video">Video</ComboBoxItem>
+                    <ComboBoxItem Tag="Audio">Audio</ComboBoxItem>
                 </ComboBox>
-                <TextBlock Text="Start:" VerticalAlignment="Center" Margin="8,0,4,0" />
+                <TextBlock Name="StartLabel" Text="Start:" VerticalAlignment="Center" Margin="8,0,4,0" />
                 <TextBox Name="StartTextBox" Width="105" Text="00:00:00.000" />
-                <TextBlock Text="End:" VerticalAlignment="Center" Margin="6,0,4,0" />
+                <TextBlock Name="EndLabel" Text="End:" VerticalAlignment="Center" Margin="6,0,4,0" />
                 <TextBox Name="EndTextBox" Width="105" Text="00:00:00.000" />
             </StackPanel>
             <CheckBox Name="ReplaceOriginalCheckBox"
@@ -603,7 +603,7 @@
         <TextBox Name="LogTextBox" DockPanel.Dock="Bottom" Height="105" Margin="0,0,0,0" IsReadOnly="True" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" />
 
         <Grid DockPanel.Dock="Bottom" Margin="0,6,0,4">
-            <TextBlock Text="Log" FontWeight="Bold" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
+            <TextBlock Name="LogLabel" Text="Log" FontWeight="Bold" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
             <CheckBox Name="AutoScrollCheckBox"
                       Content="Autoscroll"
                       HorizontalAlignment="Right"
@@ -614,7 +614,7 @@
 
         <Border Name="DropArea" BorderBrush="{DynamicResource BorderBrushDark}" BorderThickness="2" Background="{DynamicResource PanelBrush}" Padding="10" AllowDrop="True">
             <StackPanel>
-                <TextBlock Text="Drop files here or click Add" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,6" />
+                <TextBlock Name="DropAreaLabel" Text="Drop files here or click Add" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,6" />
                 <ListBox Name="FilesList" MinHeight="180" />
             </StackPanel>
         </Border>

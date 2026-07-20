@@ -33,6 +33,7 @@ namespace FFmpegConverterGUI
         private readonly object processLock = new object();
         private readonly object updateLock = new object();
         private readonly Dictionary<string, string> settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, Dictionary<string, string>> localizedTexts = CreateLocalizedTexts();
         private readonly string settingsPath;
         private BackgroundWorker worker;
         private Process currentProcess;
@@ -43,6 +44,7 @@ namespace FFmpegConverterGUI
         private volatile bool cancelRequested;
         private volatile bool updateCheckInProgress;
         private bool darkTheme = true;
+        private string currentLanguage = "en-US";
         private bool startupUpdateCheckStarted;
 
         public MainWindow()
@@ -1245,7 +1247,7 @@ namespace FFmpegConverterGUI
         private string GetSelectedTool()
         {
             ComboBoxItem selectedItem = ToolSelector.SelectedItem as ComboBoxItem;
-            return selectedItem == null ? string.Empty : selectedItem.Content as string;
+            return GetComboBoxItemValue(selectedItem, string.Empty);
         }
 
         private string GetSelectedFormat()
@@ -1254,7 +1256,7 @@ namespace FFmpegConverterGUI
             Dispatcher.Invoke(new Action(delegate
             {
                 ComboBoxItem selectedItem = FormatSelector.SelectedItem as ComboBoxItem;
-                value = selectedItem == null ? "MP4" : selectedItem.Content as string;
+                value = GetComboBoxItemValue(selectedItem, "MP4");
             }));
 
             return value;
@@ -1266,7 +1268,7 @@ namespace FFmpegConverterGUI
             Dispatcher.Invoke(new Action(delegate
             {
                 ComboBoxItem selectedItem = ConvertTypeSelector.SelectedItem as ComboBoxItem;
-                audio = selectedItem != null && string.Equals(selectedItem.Content as string, "Audio", StringComparison.OrdinalIgnoreCase);
+                audio = string.Equals(GetComboBoxItemValue(selectedItem, string.Empty), "Audio", StringComparison.OrdinalIgnoreCase);
             }));
 
             return audio;
@@ -1278,7 +1280,7 @@ namespace FFmpegConverterGUI
             Dispatcher.Invoke(new Action(delegate
             {
                 ComboBoxItem selectedItem = ConvertTypeSelector.SelectedItem as ComboBoxItem;
-                image = selectedItem != null && string.Equals(selectedItem.Content as string, "Image", StringComparison.OrdinalIgnoreCase);
+                image = string.Equals(GetComboBoxItemValue(selectedItem, string.Empty), "Image", StringComparison.OrdinalIgnoreCase);
             }));
 
             return image;
@@ -1292,7 +1294,7 @@ namespace FFmpegConverterGUI
             }
 
             ComboBoxItem selectedType = ConvertTypeSelector.SelectedItem as ComboBoxItem;
-            string type = selectedType == null ? "Video" : selectedType.Content as string;
+            string type = GetComboBoxItemValue(selectedType, "Video");
             FormatSelector.Items.Clear();
 
             if (string.Equals(type, "Audio", StringComparison.OrdinalIgnoreCase))
@@ -1367,7 +1369,7 @@ namespace FFmpegConverterGUI
                 ComboBoxItem selectedItem = GifQualitySelector.SelectedItem as ComboBoxItem;
                 if (selectedItem != null && selectedItem.Content != null)
                 {
-                    quality = selectedItem.Content as string;
+                    quality = GetComboBoxItemValue(selectedItem, "Medium");
                 }
             }));
 
@@ -1387,6 +1389,7 @@ namespace FFmpegConverterGUI
         private void AddFormatItem(string format)
         {
             ComboBoxItem item = new ComboBoxItem();
+            item.Tag = format;
             item.Content = format;
             FormatSelector.Items.Add(item);
         }
@@ -1397,10 +1400,25 @@ namespace FFmpegConverterGUI
             Dispatcher.Invoke(new Action(delegate
             {
                 ComboBoxItem selectedItem = CutTypeSelector.SelectedItem as ComboBoxItem;
-                audio = selectedItem != null && string.Equals(selectedItem.Content as string, "Audio", StringComparison.OrdinalIgnoreCase);
+                audio = string.Equals(GetComboBoxItemValue(selectedItem, string.Empty), "Audio", StringComparison.OrdinalIgnoreCase);
             }));
 
             return audio;
+        }
+
+        private string GetComboBoxItemValue(ComboBoxItem item, string defaultValue)
+        {
+            if (item == null)
+            {
+                return defaultValue;
+            }
+
+            if (item.Tag != null)
+            {
+                return item.Tag.ToString();
+            }
+
+            return item.Content == null ? defaultValue : item.Content.ToString();
         }
 
         private int GetCompressionCrf()
@@ -1532,7 +1550,7 @@ namespace FFmpegConverterGUI
         private void ShowAboutWindow()
         {
             Window about = new Window();
-            about.Title = "About";
+            about.Title = T("About");
             about.Owner = this;
             about.Width = 360;
             about.Height = 372;
@@ -1569,14 +1587,14 @@ namespace FFmpegConverterGUI
             panel.Children.Add(title);
 
             TextBlock version = new TextBlock();
-            version.Text = "Version " + GetCurrentAppVersionText();
+            version.Text = T("Version") + " " + GetCurrentAppVersionText();
             version.TextAlignment = TextAlignment.Center;
             version.Foreground = new SolidColorBrush(GetThemeColor("MutedText"));
             version.Margin = new Thickness(0, 0, 0, 12);
             panel.Children.Add(version);
 
             TextBlock credits = new TextBlock();
-            credits.Text = "Created by R4wd0G\n\nA practical FFmpeg batch toolkit reimagined as a native Windows GUI for faster everyday media conversion.";
+            credits.Text = T("CreditsText");
             credits.TextAlignment = TextAlignment.Center;
             credits.TextWrapping = TextWrapping.Wrap;
             credits.Foreground = new SolidColorBrush(GetThemeColor("MutedText"));
@@ -1601,7 +1619,7 @@ namespace FFmpegConverterGUI
             closeButton.MouseLeave += delegate { closeButton.Background = new SolidColorBrush(GetThemeColor("Accent")); };
 
             TextBlock closeText = new TextBlock();
-            closeText.Text = "Close";
+            closeText.Text = T("Close");
             closeText.Foreground = new SolidColorBrush(GetThemeColor("AccentText"));
             closeText.FontWeight = FontWeights.Bold;
             closeText.HorizontalAlignment = HorizontalAlignment.Center;
@@ -2397,10 +2415,8 @@ finally {
 
         private void ApplyLanguageSetting(string languageCode, bool saveSetting)
         {
-            if (IsNullOrWhiteSpace(languageCode))
-            {
-                languageCode = "en-US";
-            }
+            languageCode = NormalizeLanguageCode(languageCode);
+            currentLanguage = languageCode;
 
             SetLanguageMenuItemChecked(EnglishLanguageMenuItem, languageCode);
             SetLanguageMenuItemChecked(PortugueseBrazilLanguageMenuItem, languageCode);
@@ -2412,11 +2428,588 @@ finally {
             SetLanguageMenuItemChecked(KoreanLanguageMenuItem, languageCode);
             SetLanguageMenuItemChecked(ChineseSimplifiedLanguageMenuItem, languageCode);
             SetLanguageMenuItemChecked(ChineseTraditionalLanguageMenuItem, languageCode);
+            UpdateLocalizedUi();
 
             if (saveSetting)
             {
                 SetSetting("Language", languageCode);
             }
+        }
+
+        private string NormalizeLanguageCode(string languageCode)
+        {
+            if (IsNullOrWhiteSpace(languageCode) || !localizedTexts.ContainsKey(languageCode))
+            {
+                return "en-US";
+            }
+
+            return languageCode;
+        }
+
+        private string T(string key)
+        {
+            Dictionary<string, string> languageTexts;
+            string value;
+            if (localizedTexts.TryGetValue(currentLanguage, out languageTexts) && languageTexts.TryGetValue(key, out value))
+            {
+                return value;
+            }
+
+            if (localizedTexts.TryGetValue("en-US", out languageTexts) && languageTexts.TryGetValue(key, out value))
+            {
+                return value;
+            }
+
+            return key;
+        }
+
+        private void UpdateLocalizedUi()
+        {
+            FileMenuItem.Header = T("MenuFile");
+            OpenFilesMenuItem.Header = T("MenuOpenFiles");
+            ClearQueueMenuItem.Header = T("MenuClearQueue");
+            ExitMenuItem.Header = T("MenuExit");
+            SettingsMenuItem.Header = T("MenuSettings");
+            ThemeMenuItem.Header = T("MenuTheme");
+            DarkThemeMenuItem.Header = T("ThemeDark");
+            LightThemeMenuItem.Header = T("ThemeLight");
+            LanguageMenuItem.Header = T("MenuLanguage");
+            HelpMenuItem.Header = T("MenuHelp");
+            CheckForUpdatesMenuItem.Header = T("MenuCheckUpdates");
+            AboutMenuItem.Header = T("MenuAbout");
+
+            ToolLabel.Text = T("ToolLabel");
+            CompressQualityLabel.Text = T("QualityLabel");
+            ConvertTypeLabel.Text = T("TypeLabel");
+            FormatLabel.Text = T("FormatLabel");
+            GifFpsLabel.Text = T("FpsLabel");
+            GifQualityLabel.Text = T("QualityLabel");
+            CutTypeLabel.Text = T("TypeLabel");
+            StartLabel.Text = T("StartLabel");
+            EndLabel.Text = T("EndLabel");
+            ReplaceOriginalCheckBox.Content = T("ReplaceOriginal");
+            AddButton.Content = T("Add");
+            ClearButton.Content = T("Clear");
+            CancelButton.Content = T("Cancel");
+            ProcessButton.Content = T("Process");
+            LogLabel.Text = T("Log");
+            AutoScrollCheckBox.Content = T("Autoscroll");
+            DropAreaLabel.Text = T("DropArea");
+
+            SetComboBoxItemContent(ToolSelector, "Compress", T("ToolCompress"));
+            SetComboBoxItemContent(ToolSelector, "Convert", T("ToolConvert"));
+            SetComboBoxItemContent(ToolSelector, "Cut", T("ToolCut"));
+            SetComboBoxItemContent(ToolSelector, "Merge", T("ToolMerge"));
+            SetComboBoxItemContent(ToolSelector, "Remux / Repair", T("ToolRemuxRepair"));
+            SetComboBoxItemContent(ToolSelector, "Remove Subtitles", T("ToolRemoveSubtitles"));
+
+            SetComboBoxItemContent(ConvertTypeSelector, "Video", T("TypeVideo"));
+            SetComboBoxItemContent(ConvertTypeSelector, "Audio", T("TypeAudio"));
+            SetComboBoxItemContent(ConvertTypeSelector, "Image", T("TypeImage"));
+            SetComboBoxItemContent(CutTypeSelector, "Video", T("TypeVideo"));
+            SetComboBoxItemContent(CutTypeSelector, "Audio", T("TypeAudio"));
+
+            SetComboBoxItemContent(GifQualitySelector, "Low", T("Low"));
+            SetComboBoxItemContent(GifQualitySelector, "Medium", T("Medium"));
+            SetComboBoxItemContent(GifQualitySelector, "High", T("High"));
+        }
+
+        private void SetComboBoxItemContent(ComboBox comboBox, string value, string content)
+        {
+            if (comboBox == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < comboBox.Items.Count; i++)
+            {
+                ComboBoxItem item = comboBox.Items[i] as ComboBoxItem;
+                if (item != null && item.Tag != null && string.Equals(item.Tag.ToString(), value, StringComparison.OrdinalIgnoreCase))
+                {
+                    item.Content = content;
+                    return;
+                }
+            }
+        }
+
+        private static Dictionary<string, Dictionary<string, string>> CreateLocalizedTexts()
+        {
+            Dictionary<string, Dictionary<string, string>> texts = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+            texts["en-US"] = CreateEnglishTexts();
+            texts["pt-BR"] = CreatePortugueseBrazilTexts();
+            texts["es-ES"] = CreateSpanishTexts();
+            texts["fr-FR"] = CreateFrenchTexts();
+            texts["de-DE"] = CreateGermanTexts();
+            texts["it-IT"] = CreateItalianTexts();
+            texts["ja-JP"] = CreateJapaneseTexts();
+            texts["ko-KR"] = CreateKoreanTexts();
+            texts["zh-CN"] = CreateChineseSimplifiedTexts();
+            texts["zh-TW"] = CreateChineseTraditionalTexts();
+            return texts;
+        }
+
+        private static Dictionary<string, string> CreateEnglishTexts()
+        {
+            Dictionary<string, string> text = CreateBaseEnglishTexts();
+            return text;
+        }
+
+        private static Dictionary<string, string> CreatePortugueseBrazilTexts()
+        {
+            Dictionary<string, string> text = CreateBaseEnglishTexts();
+            text["MenuFile"] = "_Arquivo";
+            text["MenuOpenFiles"] = "_Abrir arquivos...";
+            text["MenuClearQueue"] = "_Limpar fila";
+            text["MenuExit"] = "_Sair";
+            text["MenuSettings"] = "_Configurações";
+            text["MenuTheme"] = "_Tema";
+            text["ThemeDark"] = "_Escuro";
+            text["ThemeLight"] = "_Claro";
+            text["MenuLanguage"] = "_Idioma";
+            text["MenuHelp"] = "A_juda";
+            text["MenuCheckUpdates"] = "_Verificar atualizações";
+            text["MenuAbout"] = "_Sobre";
+            text["ToolLabel"] = "Ferramenta:";
+            text["QualityLabel"] = "Qualidade:";
+            text["TypeLabel"] = "Tipo:";
+            text["FormatLabel"] = "Formato:";
+            text["StartLabel"] = "Início:";
+            text["EndLabel"] = "Fim:";
+            text["ReplaceOriginal"] = "Substituir original";
+            text["Add"] = "Adicionar";
+            text["Clear"] = "Limpar";
+            text["Cancel"] = "Cancelar";
+            text["Process"] = "Processar";
+            text["Log"] = "Log";
+            text["Autoscroll"] = "Rolagem automática";
+            text["DropArea"] = "Solte arquivos aqui ou clique em Adicionar";
+            text["ToolCompress"] = "Comprimir";
+            text["ToolConvert"] = "Converter";
+            text["ToolCut"] = "Cortar";
+            text["ToolMerge"] = "Juntar";
+            text["ToolRemuxRepair"] = "Remux / Reparar";
+            text["ToolRemoveSubtitles"] = "Remover legendas";
+            text["TypeVideo"] = "Vídeo";
+            text["TypeAudio"] = "Áudio";
+            text["TypeImage"] = "Imagem";
+            text["Low"] = "Baixa";
+            text["Medium"] = "Média";
+            text["High"] = "Alta";
+            text["About"] = "Sobre";
+            text["Version"] = "Versão";
+            text["Close"] = "Fechar";
+            text["CreditsText"] = "Criado por R4wd0G\n\nUm kit prático de scripts FFmpeg reinventado como uma interface nativa do Windows para conversões de mídia do dia a dia.";
+            return text;
+        }
+
+        private static Dictionary<string, string> CreateSpanishTexts()
+        {
+            Dictionary<string, string> text = CreateBaseEnglishTexts();
+            text["MenuFile"] = "_Archivo";
+            text["MenuOpenFiles"] = "_Abrir archivos...";
+            text["MenuClearQueue"] = "_Limpiar cola";
+            text["MenuExit"] = "_Salir";
+            text["MenuSettings"] = "_Configuración";
+            text["MenuTheme"] = "_Tema";
+            text["ThemeDark"] = "_Oscuro";
+            text["ThemeLight"] = "_Claro";
+            text["MenuLanguage"] = "_Idioma";
+            text["MenuHelp"] = "A_yuda";
+            text["MenuCheckUpdates"] = "_Buscar actualizaciones";
+            text["MenuAbout"] = "_Acerca de";
+            text["ToolLabel"] = "Herramienta:";
+            text["QualityLabel"] = "Calidad:";
+            text["TypeLabel"] = "Tipo:";
+            text["FormatLabel"] = "Formato:";
+            text["StartLabel"] = "Inicio:";
+            text["EndLabel"] = "Fin:";
+            text["ReplaceOriginal"] = "Reemplazar original";
+            text["Add"] = "Agregar";
+            text["Clear"] = "Limpiar";
+            text["Cancel"] = "Cancelar";
+            text["Process"] = "Procesar";
+            text["Autoscroll"] = "Desplazamiento automático";
+            text["DropArea"] = "Suelta archivos aquí o haz clic en Agregar";
+            text["ToolCompress"] = "Comprimir";
+            text["ToolConvert"] = "Convertir";
+            text["ToolCut"] = "Cortar";
+            text["ToolMerge"] = "Unir";
+            text["ToolRemuxRepair"] = "Remux / Reparar";
+            text["ToolRemoveSubtitles"] = "Quitar subtítulos";
+            text["TypeVideo"] = "Vídeo";
+            text["TypeAudio"] = "Audio";
+            text["TypeImage"] = "Imagen";
+            text["Low"] = "Baja";
+            text["Medium"] = "Media";
+            text["High"] = "Alta";
+            text["About"] = "Acerca de";
+            text["Version"] = "Versión";
+            text["Close"] = "Cerrar";
+            text["CreditsText"] = "Creado por R4wd0G\n\nUn kit práctico de scripts FFmpeg reinventado como una interfaz nativa de Windows para conversiones multimedia cotidianas.";
+            return text;
+        }
+
+        private static Dictionary<string, string> CreateFrenchTexts()
+        {
+            Dictionary<string, string> text = CreateBaseEnglishTexts();
+            text["MenuFile"] = "_Fichier";
+            text["MenuOpenFiles"] = "_Ouvrir des fichiers...";
+            text["MenuClearQueue"] = "_Vider la file";
+            text["MenuExit"] = "_Quitter";
+            text["MenuSettings"] = "_Paramètres";
+            text["MenuTheme"] = "_Thème";
+            text["ThemeDark"] = "_Sombre";
+            text["ThemeLight"] = "_Clair";
+            text["MenuLanguage"] = "_Langue";
+            text["MenuHelp"] = "_Aide";
+            text["MenuCheckUpdates"] = "_Rechercher des mises à jour";
+            text["MenuAbout"] = "_À propos";
+            text["ToolLabel"] = "Outil :";
+            text["QualityLabel"] = "Qualité :";
+            text["TypeLabel"] = "Type :";
+            text["FormatLabel"] = "Format :";
+            text["StartLabel"] = "Début :";
+            text["EndLabel"] = "Fin :";
+            text["ReplaceOriginal"] = "Remplacer l'original";
+            text["Add"] = "Ajouter";
+            text["Clear"] = "Effacer";
+            text["Cancel"] = "Annuler";
+            text["Process"] = "Traiter";
+            text["Autoscroll"] = "Défilement auto";
+            text["DropArea"] = "Déposez les fichiers ici ou cliquez sur Ajouter";
+            text["ToolCompress"] = "Compresser";
+            text["ToolConvert"] = "Convertir";
+            text["ToolCut"] = "Couper";
+            text["ToolMerge"] = "Fusionner";
+            text["ToolRemuxRepair"] = "Remux / Réparer";
+            text["ToolRemoveSubtitles"] = "Supprimer les sous-titres";
+            text["TypeVideo"] = "Vidéo";
+            text["TypeAudio"] = "Audio";
+            text["TypeImage"] = "Image";
+            text["Low"] = "Basse";
+            text["Medium"] = "Moyenne";
+            text["High"] = "Haute";
+            text["About"] = "À propos";
+            text["Version"] = "Version";
+            text["Close"] = "Fermer";
+            text["CreditsText"] = "Créé par R4wd0G\n\nUne boîte à outils FFmpeg pratique réinventée comme une interface Windows native pour les conversions multimédias quotidiennes.";
+            return text;
+        }
+
+        private static Dictionary<string, string> CreateGermanTexts()
+        {
+            Dictionary<string, string> text = CreateBaseEnglishTexts();
+            text["MenuFile"] = "_Datei";
+            text["MenuOpenFiles"] = "_Dateien öffnen...";
+            text["MenuClearQueue"] = "_Warteschlange leeren";
+            text["MenuExit"] = "_Beenden";
+            text["MenuSettings"] = "_Einstellungen";
+            text["MenuTheme"] = "_Design";
+            text["ThemeDark"] = "_Dunkel";
+            text["ThemeLight"] = "_Hell";
+            text["MenuLanguage"] = "_Sprache";
+            text["MenuHelp"] = "_Hilfe";
+            text["MenuCheckUpdates"] = "_Nach Updates suchen";
+            text["MenuAbout"] = "_Über";
+            text["ToolLabel"] = "Werkzeug:";
+            text["QualityLabel"] = "Qualität:";
+            text["TypeLabel"] = "Typ:";
+            text["FormatLabel"] = "Format:";
+            text["StartLabel"] = "Start:";
+            text["EndLabel"] = "Ende:";
+            text["ReplaceOriginal"] = "Original ersetzen";
+            text["Add"] = "Hinzufügen";
+            text["Clear"] = "Leeren";
+            text["Cancel"] = "Abbrechen";
+            text["Process"] = "Verarbeiten";
+            text["Autoscroll"] = "Automatisch scrollen";
+            text["DropArea"] = "Dateien hier ablegen oder auf Hinzufügen klicken";
+            text["ToolCompress"] = "Komprimieren";
+            text["ToolConvert"] = "Konvertieren";
+            text["ToolCut"] = "Schneiden";
+            text["ToolMerge"] = "Zusammenführen";
+            text["ToolRemuxRepair"] = "Remux / Reparieren";
+            text["ToolRemoveSubtitles"] = "Untertitel entfernen";
+            text["TypeVideo"] = "Video";
+            text["TypeAudio"] = "Audio";
+            text["TypeImage"] = "Bild";
+            text["Low"] = "Niedrig";
+            text["Medium"] = "Mittel";
+            text["High"] = "Hoch";
+            text["About"] = "Über";
+            text["Version"] = "Version";
+            text["Close"] = "Schließen";
+            text["CreditsText"] = "Erstellt von R4wd0G\n\nEin praktisches FFmpeg-Batch-Toolkit, neu gedacht als native Windows-Oberfläche für alltägliche Medienkonvertierungen.";
+            return text;
+        }
+
+        private static Dictionary<string, string> CreateItalianTexts()
+        {
+            Dictionary<string, string> text = CreateBaseEnglishTexts();
+            text["MenuFile"] = "_File";
+            text["MenuOpenFiles"] = "_Apri file...";
+            text["MenuClearQueue"] = "_Svuota coda";
+            text["MenuExit"] = "_Esci";
+            text["MenuSettings"] = "_Impostazioni";
+            text["MenuTheme"] = "_Tema";
+            text["ThemeDark"] = "_Scuro";
+            text["ThemeLight"] = "_Chiaro";
+            text["MenuLanguage"] = "_Lingua";
+            text["MenuHelp"] = "_Aiuto";
+            text["MenuCheckUpdates"] = "_Controlla aggiornamenti";
+            text["MenuAbout"] = "_Informazioni";
+            text["ToolLabel"] = "Strumento:";
+            text["QualityLabel"] = "Qualità:";
+            text["TypeLabel"] = "Tipo:";
+            text["StartLabel"] = "Inizio:";
+            text["EndLabel"] = "Fine:";
+            text["ReplaceOriginal"] = "Sostituisci originale";
+            text["Add"] = "Aggiungi";
+            text["Clear"] = "Pulisci";
+            text["Cancel"] = "Annulla";
+            text["Process"] = "Elabora";
+            text["Autoscroll"] = "Scorrimento automatico";
+            text["DropArea"] = "Rilascia i file qui o fai clic su Aggiungi";
+            text["ToolCompress"] = "Comprimi";
+            text["ToolConvert"] = "Converti";
+            text["ToolCut"] = "Taglia";
+            text["ToolMerge"] = "Unisci";
+            text["ToolRemuxRepair"] = "Remux / Ripara";
+            text["ToolRemoveSubtitles"] = "Rimuovi sottotitoli";
+            text["TypeVideo"] = "Video";
+            text["TypeAudio"] = "Audio";
+            text["TypeImage"] = "Immagine";
+            text["Low"] = "Bassa";
+            text["Medium"] = "Media";
+            text["High"] = "Alta";
+            text["About"] = "Informazioni";
+            text["Version"] = "Versione";
+            text["Close"] = "Chiudi";
+            text["CreditsText"] = "Creato da R4wd0G\n\nUn pratico toolkit batch FFmpeg reinventato come interfaccia Windows nativa per le conversioni multimediali quotidiane.";
+            return text;
+        }
+
+        private static Dictionary<string, string> CreateJapaneseTexts()
+        {
+            Dictionary<string, string> text = CreateBaseEnglishTexts();
+            text["MenuFile"] = "ファイル(_F)";
+            text["MenuOpenFiles"] = "ファイルを開く...";
+            text["MenuClearQueue"] = "キューをクリア";
+            text["MenuExit"] = "終了";
+            text["MenuSettings"] = "設定";
+            text["MenuTheme"] = "テーマ";
+            text["ThemeDark"] = "ダーク";
+            text["ThemeLight"] = "ライト";
+            text["MenuLanguage"] = "言語";
+            text["MenuHelp"] = "ヘルプ";
+            text["MenuCheckUpdates"] = "更新を確認";
+            text["MenuAbout"] = "バージョン情報";
+            text["ToolLabel"] = "ツール:";
+            text["QualityLabel"] = "品質:";
+            text["TypeLabel"] = "種類:";
+            text["FormatLabel"] = "形式:";
+            text["StartLabel"] = "開始:";
+            text["EndLabel"] = "終了:";
+            text["ReplaceOriginal"] = "元ファイルを置き換える";
+            text["Add"] = "追加";
+            text["Clear"] = "クリア";
+            text["Cancel"] = "キャンセル";
+            text["Process"] = "実行";
+            text["Autoscroll"] = "自動スクロール";
+            text["DropArea"] = "ここにファイルをドロップするか、追加をクリック";
+            text["ToolCompress"] = "圧縮";
+            text["ToolConvert"] = "変換";
+            text["ToolCut"] = "カット";
+            text["ToolMerge"] = "結合";
+            text["ToolRemuxRepair"] = "Remux / 修復";
+            text["ToolRemoveSubtitles"] = "字幕を削除";
+            text["TypeVideo"] = "動画";
+            text["TypeAudio"] = "音声";
+            text["TypeImage"] = "画像";
+            text["Low"] = "低";
+            text["Medium"] = "中";
+            text["High"] = "高";
+            text["About"] = "バージョン情報";
+            text["Version"] = "バージョン";
+            text["Close"] = "閉じる";
+            text["CreditsText"] = "作成者: R4wd0G\n\n日常的なメディア変換をすばやく行うために、実用的な FFmpeg バッチツールキットを Windows ネイティブ GUI として再構築しました。";
+            return text;
+        }
+
+        private static Dictionary<string, string> CreateKoreanTexts()
+        {
+            Dictionary<string, string> text = CreateBaseEnglishTexts();
+            text["MenuFile"] = "파일";
+            text["MenuOpenFiles"] = "파일 열기...";
+            text["MenuClearQueue"] = "대기열 지우기";
+            text["MenuExit"] = "종료";
+            text["MenuSettings"] = "설정";
+            text["MenuTheme"] = "테마";
+            text["ThemeDark"] = "어둡게";
+            text["ThemeLight"] = "밝게";
+            text["MenuLanguage"] = "언어";
+            text["MenuHelp"] = "도움말";
+            text["MenuCheckUpdates"] = "업데이트 확인";
+            text["MenuAbout"] = "정보";
+            text["ToolLabel"] = "도구:";
+            text["QualityLabel"] = "품질:";
+            text["TypeLabel"] = "유형:";
+            text["FormatLabel"] = "형식:";
+            text["StartLabel"] = "시작:";
+            text["EndLabel"] = "끝:";
+            text["ReplaceOriginal"] = "원본 바꾸기";
+            text["Add"] = "추가";
+            text["Clear"] = "지우기";
+            text["Cancel"] = "취소";
+            text["Process"] = "처리";
+            text["Autoscroll"] = "자동 스크롤";
+            text["DropArea"] = "여기에 파일을 놓거나 추가를 클릭하세요";
+            text["ToolCompress"] = "압축";
+            text["ToolConvert"] = "변환";
+            text["ToolCut"] = "자르기";
+            text["ToolMerge"] = "병합";
+            text["ToolRemuxRepair"] = "Remux / 복구";
+            text["ToolRemoveSubtitles"] = "자막 제거";
+            text["TypeVideo"] = "비디오";
+            text["TypeAudio"] = "오디오";
+            text["TypeImage"] = "이미지";
+            text["Low"] = "낮음";
+            text["Medium"] = "중간";
+            text["High"] = "높음";
+            text["About"] = "정보";
+            text["Version"] = "버전";
+            text["Close"] = "닫기";
+            text["CreditsText"] = "제작: R4wd0G\n\n일상적인 미디어 변환을 빠르게 수행하기 위해 실용적인 FFmpeg 배치 도구를 Windows 네이티브 GUI로 재구성했습니다.";
+            return text;
+        }
+
+        private static Dictionary<string, string> CreateChineseSimplifiedTexts()
+        {
+            Dictionary<string, string> text = CreateBaseEnglishTexts();
+            text["MenuFile"] = "文件";
+            text["MenuOpenFiles"] = "打开文件...";
+            text["MenuClearQueue"] = "清空队列";
+            text["MenuExit"] = "退出";
+            text["MenuSettings"] = "设置";
+            text["MenuTheme"] = "主题";
+            text["ThemeDark"] = "深色";
+            text["ThemeLight"] = "浅色";
+            text["MenuLanguage"] = "语言";
+            text["MenuHelp"] = "帮助";
+            text["MenuCheckUpdates"] = "检查更新";
+            text["MenuAbout"] = "关于";
+            text["ToolLabel"] = "工具:";
+            text["QualityLabel"] = "质量:";
+            text["TypeLabel"] = "类型:";
+            text["FormatLabel"] = "格式:";
+            text["StartLabel"] = "开始:";
+            text["EndLabel"] = "结束:";
+            text["ReplaceOriginal"] = "替换原文件";
+            text["Add"] = "添加";
+            text["Clear"] = "清空";
+            text["Cancel"] = "取消";
+            text["Process"] = "处理";
+            text["Autoscroll"] = "自动滚动";
+            text["DropArea"] = "将文件拖到这里或点击添加";
+            text["ToolCompress"] = "压缩";
+            text["ToolConvert"] = "转换";
+            text["ToolCut"] = "剪切";
+            text["ToolMerge"] = "合并";
+            text["ToolRemuxRepair"] = "Remux / 修复";
+            text["ToolRemoveSubtitles"] = "移除字幕";
+            text["TypeVideo"] = "视频";
+            text["TypeAudio"] = "音频";
+            text["TypeImage"] = "图像";
+            text["Low"] = "低";
+            text["Medium"] = "中";
+            text["High"] = "高";
+            text["About"] = "关于";
+            text["Version"] = "版本";
+            text["Close"] = "关闭";
+            text["CreditsText"] = "由 R4wd0G 创建\n\n一个实用的 FFmpeg 批处理工具包，重新设计为原生 Windows 图形界面，用于日常媒体转换。";
+            return text;
+        }
+
+        private static Dictionary<string, string> CreateChineseTraditionalTexts()
+        {
+            Dictionary<string, string> text = CreateChineseSimplifiedTexts();
+            text["MenuClearQueue"] = "清空佇列";
+            text["MenuSettings"] = "設定";
+            text["ThemeDark"] = "深色";
+            text["ThemeLight"] = "淺色";
+            text["MenuLanguage"] = "語言";
+            text["MenuCheckUpdates"] = "檢查更新";
+            text["ToolLabel"] = "工具:";
+            text["QualityLabel"] = "品質:";
+            text["TypeLabel"] = "類型:";
+            text["StartLabel"] = "開始:";
+            text["EndLabel"] = "結束:";
+            text["ReplaceOriginal"] = "取代原始檔";
+            text["Autoscroll"] = "自動捲動";
+            text["DropArea"] = "將檔案拖到這裡或按一下新增";
+            text["ToolCompress"] = "壓縮";
+            text["ToolConvert"] = "轉換";
+            text["ToolCut"] = "剪切";
+            text["ToolMerge"] = "合併";
+            text["ToolRemuxRepair"] = "Remux / 修復";
+            text["ToolRemoveSubtitles"] = "移除字幕";
+            text["TypeVideo"] = "影片";
+            text["TypeAudio"] = "音訊";
+            text["TypeImage"] = "影像";
+            text["About"] = "關於";
+            text["Version"] = "版本";
+            text["Close"] = "關閉";
+            text["CreditsText"] = "由 R4wd0G 建立\n\n一個實用的 FFmpeg 批次工具包，重新設計為原生 Windows 圖形介面，用於日常媒體轉換。";
+            return text;
+        }
+
+        private static Dictionary<string, string> CreateBaseEnglishTexts()
+        {
+            Dictionary<string, string> text = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            text["MenuFile"] = "_File";
+            text["MenuOpenFiles"] = "_Open files...";
+            text["MenuClearQueue"] = "_Clear queue";
+            text["MenuExit"] = "E_xit";
+            text["MenuSettings"] = "_Settings";
+            text["MenuTheme"] = "_Theme";
+            text["ThemeDark"] = "_Dark";
+            text["ThemeLight"] = "_Light";
+            text["MenuLanguage"] = "_Language";
+            text["MenuHelp"] = "_Help";
+            text["MenuCheckUpdates"] = "_Check for updates";
+            text["MenuAbout"] = "_About";
+            text["ToolLabel"] = "Tool:";
+            text["QualityLabel"] = "Quality:";
+            text["TypeLabel"] = "Type:";
+            text["FormatLabel"] = "Format:";
+            text["FpsLabel"] = "FPS:";
+            text["StartLabel"] = "Start:";
+            text["EndLabel"] = "End:";
+            text["ReplaceOriginal"] = "Replace original";
+            text["Add"] = "Add";
+            text["Clear"] = "Clear";
+            text["Cancel"] = "Cancel";
+            text["Process"] = "Process";
+            text["Log"] = "Log";
+            text["Autoscroll"] = "Autoscroll";
+            text["DropArea"] = "Drop files here or click Add";
+            text["ToolCompress"] = "Compress";
+            text["ToolConvert"] = "Convert";
+            text["ToolCut"] = "Cut";
+            text["ToolMerge"] = "Merge";
+            text["ToolRemuxRepair"] = "Remux / Repair";
+            text["ToolRemoveSubtitles"] = "Remove Subtitles";
+            text["TypeVideo"] = "Video";
+            text["TypeAudio"] = "Audio";
+            text["TypeImage"] = "Image";
+            text["Low"] = "Low";
+            text["Medium"] = "Medium";
+            text["High"] = "High";
+            text["About"] = "About";
+            text["Version"] = "Version";
+            text["Close"] = "Close";
+            text["CreditsText"] = "Created by R4wd0G\n\nA practical FFmpeg batch toolkit reimagined as a native Windows GUI for faster everyday media conversion.";
+            return text;
         }
 
         private void SetLanguageMenuItemChecked(MenuItem item, string languageCode)

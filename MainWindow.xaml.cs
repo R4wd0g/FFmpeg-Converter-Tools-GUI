@@ -1576,28 +1576,6 @@ namespace FFmpegConverterGUI
             buttonRow.HorizontalAlignment = HorizontalAlignment.Center;
             buttonRow.Margin = new Thickness(0, 0, 0, 4);
 
-            Border updateButton = new Border();
-            updateButton.Width = 150;
-            updateButton.Height = 34;
-            updateButton.CornerRadius = new CornerRadius(8);
-            updateButton.Background = new SolidColorBrush(GetThemeColor("PanelAlt"));
-            updateButton.BorderBrush = new SolidColorBrush(GetThemeColor("Border"));
-            updateButton.BorderThickness = new Thickness(1);
-            updateButton.HorizontalAlignment = HorizontalAlignment.Center;
-            updateButton.Cursor = Cursors.Hand;
-            updateButton.Margin = new Thickness(0, 0, 10, 0);
-            updateButton.MouseEnter += delegate { updateButton.Background = new SolidColorBrush(GetThemeColor("Hover")); };
-            updateButton.MouseLeave += delegate { updateButton.Background = new SolidColorBrush(GetThemeColor("PanelAlt")); };
-
-            TextBlock updateText = new TextBlock();
-            updateText.Text = "Check for updates";
-            updateText.Foreground = new SolidColorBrush(GetThemeColor("Text"));
-            updateText.FontWeight = FontWeights.SemiBold;
-            updateText.HorizontalAlignment = HorizontalAlignment.Center;
-            updateText.VerticalAlignment = VerticalAlignment.Center;
-            updateButton.Child = updateText;
-            buttonRow.Children.Add(updateButton);
-
             Border closeButton = new Border();
             closeButton.Width = 96;
             closeButton.Height = 34;
@@ -1679,10 +1657,6 @@ namespace FFmpegConverterGUI
                 aboutFadeTimer.Start();
             };
 
-            updateButton.MouseLeftButtonUp += delegate
-            {
-                BeginCheckForUpdates(true, about);
-            };
             closeButton.MouseLeftButtonUp += delegate { beginClose(); };
             about.Closing += delegate(object sender, CancelEventArgs e)
             {
@@ -1723,7 +1697,11 @@ namespace FFmpegConverterGUI
                 updateCheckInProgress = true;
             }
 
-            Log("Checking for updates...");
+            if (interactive)
+            {
+                Log("Checking for updates...");
+            }
+
             ThreadPool.QueueUserWorkItem(delegate
             {
                 try
@@ -1762,9 +1740,9 @@ namespace FFmpegConverterGUI
 
                 if (!TryParseVersion(currentVersionText, out currentVersion) || !TryParseVersion(latestVersionText, out latestVersion))
                 {
-                    Log("Update check failed: invalid version information.");
                     if (interactive)
                     {
+                        Log("Update check failed: invalid version information.");
                         ShowMessage(owner, "Could not compare the current version with the latest release.", "Check for updates", MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
 
@@ -1773,9 +1751,9 @@ namespace FFmpegConverterGUI
 
                 if (latestVersion.CompareTo(currentVersion) <= 0)
                 {
-                    Log("No updates found.");
                     if (interactive)
                     {
+                        Log("No updates found.");
                         ShowMessage(owner, "You are already using the latest version (" + currentVersionText + ").", "Check for updates", MessageBoxButton.OK, MessageBoxImage.Information);
                     }
 
@@ -1785,9 +1763,9 @@ namespace FFmpegConverterGUI
                 ReleaseAssetInfo asset = FindBestUpdateAsset(release, DetectInstallMode());
                 if (asset == null)
                 {
-                    Log("Update found, but no compatible asset is available in the latest release.");
                     if (interactive)
                     {
+                        Log("Update found, but no compatible asset is available in the latest release.");
                         ShowMessage(owner, "A newer release was found, but no compatible download asset is available.", "Check for updates", MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
 
@@ -1803,7 +1781,11 @@ namespace FFmpegConverterGUI
 
                 if (result != MessageBoxResult.Yes)
                 {
-                    Log("Update prompt dismissed by the user.");
+                    if (interactive)
+                    {
+                        Log("Update prompt dismissed by the user.");
+                    }
+
                     return;
                 }
 
@@ -1818,9 +1800,9 @@ namespace FFmpegConverterGUI
             }
             catch (Exception ex)
             {
-                Log("Update check failed: " + ex.Message);
                 if (interactive)
                 {
+                    Log("Update check failed: " + ex.Message);
                     ShowMessage(owner, "Update check failed: " + ex.Message, "Check for updates", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
             }

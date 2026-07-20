@@ -46,7 +46,10 @@ jobs:
       - name: Install .NET Framework 4.8 targeting pack
         shell: pwsh
         run: |
-          choco install netfx-4.8-devpack --no-progress -y
+          $url = 'https://download.microsoft.com/download/5/3/8/5380FB1A-0C9D-4B44-8A9A-0D227A9B55E6/NDP481-KB4522466-x86-x64-AllOS-ENU.exe'
+          $out = Join-Path $env:TEMP 'ndp481.exe'
+          Invoke-WebRequest -Uri $url -OutFile $out
+          Start-Process -FilePath $out -ArgumentList '/quiet /norestart' -Wait -NoNewWindow
 
       - name: Read version from AssemblyInfo
         shell: pwsh

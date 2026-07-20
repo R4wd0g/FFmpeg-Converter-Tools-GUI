@@ -10,6 +10,10 @@
   #define OutputDir "..\\artifacts"
 #endif
 
+#ifndef PlatformSuffix
+  #define PlatformSuffix "win_x64"
+#endif
+
 #define MyAppName "FFmpeg Converter Tools GUI"
 #define MyAppPublisher "R4wd0G"
 #define MyAppExeName "FFmpegConverterGUI.exe"
@@ -29,7 +33,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
 OutputDir={#OutputDir}
-OutputBaseFilename=FFmpeg-Converter-Tools-GUI-{#MyAppVersion}-installer
+OutputBaseFilename=FFmpeg-Converter-Tools-GUI-{#MyAppVersion}-{#PlatformSuffix}-installer
 SetupIconFile=..\icon.ico
 Compression=lzma2
 SolidCompression=yes

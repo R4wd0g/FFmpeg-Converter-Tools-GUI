@@ -80,13 +80,13 @@ jobs:
         run: |
           $sourceDir = (Resolve-Path '.\release-staging\installer').Path
           $outputDir = (Resolve-Path '.\artifacts').Path
-          & iscc "/DMyAppVersion=$env:APP_VERSION" "/DSourceDir=$sourceDir" "/DOutputDir=$outputDir" ".\installer\FFmpegConverterGUI.iss"
+          & iscc "/DMyAppVersion=$env:APP_VERSION" "/DPlatformSuffix=win_x64" "/DSourceDir=$sourceDir" "/DOutputDir=$outputDir" ".\installer\FFmpegConverterGUI.iss"
 
       - name: Verify release artifacts
         shell: pwsh
         run: |
-          $portable = "artifacts/FFmpeg-Converter-Tools-GUI-$env:APP_VERSION-portable.zip"
-          $installer = "artifacts/FFmpeg-Converter-Tools-GUI-$env:APP_VERSION-installer.exe"
+          $portable = "artifacts/FFmpeg-Converter-Tools-GUI-$env:APP_VERSION-win_x64-portable.zip"
+          $installer = "artifacts/FFmpeg-Converter-Tools-GUI-$env:APP_VERSION-win_x64-installer.exe"
 
           if (-not (Test-Path -LiteralPath $portable)) {
             throw "Portable artifact not found: $portable"
@@ -103,7 +103,7 @@ jobs:
         with:
           tag: ${{ env.RELEASE_TAG }}
           name: FFmpeg Converter Tools GUI v${{ env.APP_VERSION }}
-          artifacts: artifacts/FFmpeg-Converter-Tools-GUI-${{ env.APP_VERSION }}-portable.zip,artifacts/FFmpeg-Converter-Tools-GUI-${{ env.APP_VERSION }}-installer.exe
+          artifacts: artifacts/FFmpeg-Converter-Tools-GUI-${{ env.APP_VERSION }}-win_x64-portable.zip,artifacts/FFmpeg-Converter-Tools-GUI-${{ env.APP_VERSION }}-win_x64-installer.exe
           allowUpdates: true
           replacesArtifacts: true
           artifactErrorsFailBuild: true

@@ -19,11 +19,14 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Microsoft.Win32;
 
 namespace FFmpegConverterGUI
 {
     public partial class MainWindow : Window
     {
+        private const string InstallRegistrySubkey = @"Software\R4wd0G\FFmpeg Converter Tools GUI";
+        private const string InstallRegistryValueName = "InstallMode";
         private const string BtbNFfmpegZipUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-05-13-55/ffmpeg-N-124841-gb355200263-win64-gpl.zip";
         private const string GitHubLatestReleaseApiUrl = "https://api.github.com/repos/R4wd0g/FFmpeg-Converter-Tools-GUI/releases/latest";
         private const string GitHubApiUserAgent = "FFmpeg-Converter-Tools-GUI-Updater";
@@ -1994,25 +1997,28 @@ finally {
 
         private InstallMode DetectInstallMode()
         {
-            string markerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "install-mode.txt");
-            if (File.Exists(markerPath))
+            try
             {
-                try
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(InstallRegistrySubkey))
                 {
-                    string marker = File.ReadAllText(markerPath).Trim();
-                    if (string.Equals(marker, "installer", StringComparison.OrdinalIgnoreCase))
+                    if (key != null)
                     {
-                        return InstallMode.Installer;
-                    }
+                        object value = key.GetValue(InstallRegistryValueName);
+                        string marker = value as string;
+                        if (!string.IsNullOrWhiteSpace(marker) && string.Equals(marker.Trim(), "installer", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return InstallMode.Installer;
+                        }
 
-                    if (string.Equals(marker, "portable", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return InstallMode.Portable;
+                        if (!string.IsNullOrWhiteSpace(marker) && string.Equals(marker.Trim(), "portable", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return InstallMode.Portable;
+                        }
                     }
                 }
-                catch
-                {
-                }
+            }
+            catch
+            {
             }
 
             string appDirectory = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);

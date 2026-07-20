@@ -62,9 +62,6 @@ foreach ($stage in @($portableStage, $installerStage)) {
     }
 }
 
-Set-Content -LiteralPath (Join-Path $portableStage 'install-mode.txt') -Value 'portable' -Encoding ASCII
-Set-Content -LiteralPath (Join-Path $installerStage 'install-mode.txt') -Value 'installer' -Encoding ASCII
-
 $portableZip = Join-Path $artifactsRoot ("FFmpeg-Converter-Tools-GUI-{0}-{1}-portable.zip" -f $Version, $platformSuffix)
 if (Test-Path -LiteralPath $portableZip) {
     Remove-Item -LiteralPath $portableZip -Force
